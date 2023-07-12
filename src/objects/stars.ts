@@ -1,10 +1,12 @@
-import { getNumber } from "../utils";
-
-import { systems } from "./systems";
-
-import type { Star } from "../store/stars";
+import { systems } from "objects/systems";
+import { getNumber } from "utils/bases";
 
 export const starColor = "#eee";
+
+export type Star = {
+  size: number;
+  point: Point;
+};
 
 export const generateStars = () => {
   const starsNumber = getNumber(200, 400);
@@ -14,8 +16,8 @@ export const generateStars = () => {
     stars.push({
       size: getNumber(1, 5),
       point: {
-        x: getNumber(0, systems.solar.width),
-        y: getNumber(0, systems.solar.height),
+        x: getNumber(-systems.solar.width / 2, systems.solar.width / 2),
+        y: getNumber(-systems.solar.height / 2, systems.solar.height / 2),
       },
     });
   }
