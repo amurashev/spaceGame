@@ -29,3 +29,20 @@ export const debounce = (fn, ms = 0) => {
       }
     }
   }
+
+  export const recursiveFunc = (
+    fn: (it: number) => void,
+    timeout,
+    iMax = 0,
+    iCurrent = 0
+  ) => {
+    if (iCurrent > iMax) return;
+  
+    fn(iCurrent);
+  
+    setTimeout(
+      () => recursiveFunc(fn, timeout, iMax, iCurrent + 1),
+      timeout / iMax
+    );
+  };
+  

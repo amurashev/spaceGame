@@ -2,190 +2,126 @@
   import { onMount } from "svelte";
 
   import Canvas from "essentials/canvas";
-  import { MOVING_ANIMATION_TIME } from "config";
+  import { MOVING_ANIMATION_TIME, ANIMATION_INTERACTIONS } from "config";
+  import { getAngle, getIsPointInCircle } from "utils/trigonometry";
+  import { throttle, recursiveFunc } from "utils/functions";
 
-  import { initialPositionStore } from "./store/point";
-  import { starsStore, planetsStore } from "./store/objects";
-  import { angleStore } from "./store/angle";
-  import { isMovementStore, zoomStore, timeStore } from "./store/interface";
-  import { generateStars, starColor } from "./objects/stars";
+  import {
+    isMovementStore,
+    zoomStore,
+    timeStore,
+    povStore,
+    angleStore,
+  } from "store/interface";
+  // import { generateStars } from "objects/stars";
+  // import {
+  //   getDeltaAngle,
+  //   getPlanetPoint,
+  // } from "objects/planets";
 
-  import type { Point } from "./types";
-  import { getAngleBetweenVectors } from "utils/trigonometry";
-  import { recursiveFunc } from "utils/bases";
+  import type { Point } from "types";
 
-  import Zoom from "Zoom.svelte";
-  import { generatePlanets } from "objects/planets";
+  import Zoom from "components/Zoom.svelte";
+  import Instruments from "components/Instruments.svelte";
+  import { Space, System } from "objects/index";
 
   let canvasEl;
   let canvas: Canvas;
+  let space: Space;
 
   let isMounted = false;
 
-  const shuttleImage = new Image();
-  const planetImage = new Image();
-  const bgImage = new Image();
-
-  shuttleImage.src = "/space-shuttle.svg";
-  planetImage.src = "/planet2.svg";
-  bgImage.src = "/space2.jpg";
-
-  planetImage.onload = function () {
-    // render();
-  };
-
-  shuttleImage.onload = function () {
-    // render();
-  };
-
-  bgImage.onload = function () {
-    // render();
-  };
-
-  const getPointWithOffset = (point: Point) => {
-    const { x: deltaX, y: deltaY } = $initialPositionStore;
-    const { x: screenX, y: screenY } = canvas.getCenterPoint();
+  const getCorrectClickPoint = (e) => {
+    const { offsetX, offsetY } = e;
 
     return {
-      x: point.x + screenX - deltaX,
-      y: point.y + screenY - deltaY,
+      x: offsetX * 2,
+      y: offsetY * 2,
     };
   };
 
+  // const getPointWithOffset = (point: Point) => {
+  //   const { x: deltaX, y: deltaY } = $povStore;
+  //   const { x: screenX, y: screenY } = canvas.getCenterPoint();
+
+  //   return {
+  //     x: point.x + screenX - deltaX,
+  //     y: point.y + screenY - deltaY,
+  //   };
+  // };
+
   const movePoint = (newPoint: Point) => {
-    const AIMATION_INTERACTIONS = 50;
-
-    const { x, y } = newPoint;
     const { x: screenX, y: screenY } = canvas.getCenterPoint();
-    const { x: initialX, y: initialY } = $initialPositionStore;
+    const { x: initialX, y: initialY } = $povStore;
 
-    const destinationPoint = {
-      x: x * 2,
-      y: y * 2,
-    };
-
-    const deltaX = destinationPoint.x - screenX;
-    const deltaY = destinationPoint.y - screenY;
-
-    let angle = getAngleBetweenVectors(1, 0, 1, deltaX / deltaY);
-
-    if (deltaX > 0 && deltaY < 0) angle = angle;
-    if (deltaX > 0 && deltaY > 0) angle = Math.PI - angle;
-    if (deltaX < 0 && deltaY > 0) angle = Math.PI + angle;
-    if (deltaX < 0 && deltaY < 0) angle = 2 * Math.PI - angle;
+    const deltaX = newPoint.x - screenX;
+    const deltaY = newPoint.y - screenY;
+    const angle = getAngle(deltaX, deltaY);
 
     isMovementStore.set(true);
     angleStore.set(angle);
 
     recursiveFunc(
       (i) => {
-        if (i === AIMATION_INTERACTIONS) {
+        if (i === ANIMATION_INTERACTIONS) {
           isMovementStore.set(false);
         }
 
-        initialPositionStore.set({
-          x: Math.ceil(initialX + (deltaX / AIMATION_INTERACTIONS) * i),
-          y: Math.ceil(initialY + (deltaY / AIMATION_INTERACTIONS) * i),
-        });
+        const newPOV = {
+          x: Math.ceil(initialX + (deltaX / ANIMATION_INTERACTIONS) * i),
+          y: Math.ceil(initialY + (deltaY / ANIMATION_INTERACTIONS) * i),
+        };
+
+        povStore.set(newPOV);
+        space.setPOV(newPOV);
       },
       MOVING_ANIMATION_TIME,
-      AIMATION_INTERACTIONS
+      ANIMATION_INTERACTIONS
     );
   };
 
   const onMouseClick = (e) => {
-    const { offsetX, offsetY } = e;
+    const clickPoint = getCorrectClickPoint(e);
 
     if (!$isMovementStore) {
-      movePoint({ x: offsetX, y: offsetY });
+      movePoint(clickPoint);
     }
+
+    // const planets = $planetsStore;
+    // const cross = planets.find((item) => {
+    //   const dAngle = getDeltaAngle(item, $timeStore);
+    //   const planetPoint = getPointWithOffset(getPlanetPoint(item, dAngle));
+
+    //   return getIsPointInCircle(clickPoint, planetPoint, item.radius / 2);
+    // });
+
+    // console.warn("onMouseClick", cross);
   };
 
-  const renderUser = () => {
-    const { x, y } = canvas.getCenterPoint();
-    const size = 56;
-    canvas.drawImage(shuttleImage, x, y, $angleStore, size, size);
+  const onMouseMove = (e) => {
+    const clickPoint = getCorrectClickPoint(e);
+    // const planets = $planetsStore;
 
-    if ($isMovementStore) {
-      canvas.drawCircle(x, y, 60, 3, starColor);
-    }
-  };
+    // const cross = planets.find((item) => {
+    //   const dAngle = getDeltaAngle(item, $timeStore);
+    //   const planetPoint = getPointWithOffset(getPlanetPoint(item, dAngle));
 
-  const renderSun = () => {
-    const sunPoint = getPointWithOffset({ x: 0, y: 0 });
-    const radius = 60;
-    const linear = canvas.createLinearGradient(
-      sunPoint.x - radius,
-      sunPoint.y + radius,
-      sunPoint.x + radius * 2,
-      sunPoint.y + radius
-    );
-    linear.addColorStop(0, "#b02e03");
-    linear.addColorStop(1, "#fd9000");
+    //   return getIsPointInCircle(clickPoint, planetPoint, item.radius / 2);
+    // });
 
-    canvas.drawCircleFill(
-      sunPoint.x,
-      sunPoint.y,
-      radius * 2,
-      linear
-    );
-  };
-
-  const renderPlanets = () => {
-    const planets = $planetsStore;
-
-    planets.forEach((item) => {
-      const { distanceFromSun, speed, size, type, initialAngle } = item
-      const rad = 1420; // Math.PI / (180 * 8)
-      const dAngle = 2 * Math.PI / (360 * speed) * $timeStore
-      const planetX = distanceFromSun * Math.cos(initialAngle + dAngle);
-      const planetY = distanceFromSun * Math.sin(initialAngle + dAngle);
-      const sunPoint = getPointWithOffset({ x: 0, y: 0 });
-
-      const planetPoint = getPointWithOffset({ x: planetX, y: planetY });
-      canvas.drawCircleFill(
-        planetPoint.x,
-        planetPoint.y,
-        size / 2,
-        "#222"
-      );
-      canvas.drawCircle(sunPoint.x, sunPoint.y, distanceFromSun, 1, "#555");
-      canvas.drawImage(
-        planetImage,
-        planetPoint.x,
-        planetPoint.y,
-        0,
-        size,
-        size
-      );
-    });
-  };
-
-  const renderStars = () => {
-    const stars = $starsStore;
-
-    stars.forEach((item) => {
-      const { size, point } = item;
-      const { x, y } = getPointWithOffset(point);
-
-      canvas.drawCircleFill(x, y, size, starColor);
-    });
+    // if (cross) {
+    //   canvasEl.style.cursor = "pointer";
+    // } else {
+    //   canvasEl.style.cursor = "default";
+    // }
   };
 
   const render = () => {
-    canvas.clearCanvas();
-    const fillStyle = "#111";
-    canvas.drawRect(fillStyle);
-
-    const { width, height } = canvas.getWH()
-
-    // canvas.drawImage(bgImage, 0, 0, 0, width, height);
-
-    renderStars();
-    renderSun();
-    renderPlanets();
-    renderUser();
-
+    space.clear();
+    space.renderStars();
+    space.renderSun();
+    space.renderPlanets($timeStore);
+    space.renderUser($angleStore, $isMovementStore);
     // console.warn('render')
   };
 
@@ -193,32 +129,30 @@
     isMounted = true;
 
     canvas = new Canvas(canvasEl.getContext("2d"));
+    space = new Space(canvas);
 
-    starsStore.set(generateStars());
-    planetsStore.set(generatePlanets());
-
-    console.warn("generatePlanets()", generatePlanets());
-
-    initialPositionStore.set({
-      x: 0,
-      y: 0,
-    });
+    space.setPOV($povStore);
+    space.setSystem(new System(5000));
 
     setInterval(() => {
-      timeStore.update((t) => t + 1);
+      render();
+    }, 1000 / 30);
+
+    setInterval(() => {
+      // timeStore.update((t) => t + 1);
     }, 100);
   });
 
-  initialPositionStore.subscribe(() => {
-    if (isMounted) render();
-  });
+  // povStore.subscribe(() => {
+  //   if (isMounted) render();
+  // });
 
-  timeStore.subscribe(() => {
-    if (isMounted) render();
-  });
+  // timeStore.subscribe(() => {
+  //   if (isMounted) render();
+  // });
 
   zoomStore.subscribe((value) => {
-    if (isMounted) canvas.setScale(value)
+    if (isMounted) canvas.setScale(value);
   });
 </script>
 
@@ -229,20 +163,10 @@
     height="1200"
     id="canvas"
     on:mousedown={onMouseClick}
+    on:mousemove={throttle(onMouseMove, 100)}
   />
-  <div>
-    <div>
-      {#if $initialPositionStore}
-        <strong>{$initialPositionStore.x}:{$initialPositionStore.y}</strong>
-      {/if}
-    </div>
-    <div>
-      {#if $timeStore}
-        <strong>{$timeStore}</strong>
-      {/if}
-    </div>
-  </div>
 
+  <Instruments />
   <Zoom />
 </main>
 
