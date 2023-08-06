@@ -1,21 +1,30 @@
-<script>
-  import { povStore, timeStore, zoomStore } from "store/interface";
+<script lang="ts">
+  import { createEventDispatcher } from "svelte";
+
+  const dispatch = createEventDispatcher();
+
+  function updateZoom(isPlus: boolean) {
+    dispatch("updateZoom", {
+      isPlus,
+    });
+  }
+
+  // const zoomIn = () => {
+  //   zoomStore.update((n) => round(n + increment));
+  // };
+  // const zoomOut = () => {
+  //   zoomStore.update((n) => round(n - increment));
+  // }
 </script>
 
 <div>
   <div>
-    {#if $povStore}
-      <strong>POV: {$povStore.x}:{$povStore.y}</strong>
-    {/if}
-  </div>
-  <div>
-    {#if $timeStore}
-      <strong>Time: {$timeStore}</strong>
-    {/if}
-  </div>
-  <div>
-    {#if $zoomStore}
+    <!-- {#if $zoomStore}
       <strong>Zoom: {$zoomStore}</strong>
-    {/if}
+    {/if} -->
+
+    <button on:click={() => updateZoom(true)}> + </button>
+
+    <button on:click={() => updateZoom(false)}> - </button>
   </div>
 </div>

@@ -3,6 +3,12 @@ export const getRandomInteger = (min = 0, max = 1) =>
 
 export const getRandomNumber = (min, max) => Math.random() * (max - min) + min;
 
+export const getRandomGauss = () => {
+  const theta = 2 * Math.PI * Math.random();
+  const rho = Math.sqrt(-2 * Math.log(1 - Math.random()));
+  return (rho * Math.cos(theta)) / 10.0 + 0.5;
+};
+
 export const getChance = (value = 1) => value >= Math.random();
 
 export const getRandomNumbersArray = (min = 0, max = 100, n = 1) =>

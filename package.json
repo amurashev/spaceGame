@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate": "node ./server/generate.js",
     "build": "vite build",
     "format": "prettier --write ./**/*.{ts,js,svelte}",
     "preview": "vite preview",

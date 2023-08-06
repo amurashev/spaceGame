@@ -1,23 +1,16 @@
-export const getAngleBetweenVectors = (pointA: Point, pointB: Point) => {
-  let angle = 0;
+import type { Point } from "core/essentials";
 
-  if (pointB.y !== 0) {
-    const cosF =
-      (pointA.x * pointB.x + pointA.y * pointB.y) /
-      (Math.sqrt(pointA.x * pointA.x + pointA.y * pointA.y) *
-        Math.sqrt(pointB.x * pointB.x + pointB.y * pointB.y));
-
-    angle = Math.acos(cosF);
-  }
-
-  return angle;
+export const getVectorAngle = (x: number[], y: number[]) => {
+  let mX = Math.sqrt(x.reduce((acc, n) => acc + Math.pow(n, 2), 0));
+  let mY = Math.sqrt(y.reduce((acc, n) => acc + Math.pow(n, 2), 0));
+  return Math.acos(x.reduce((acc, n, i) => acc + n * y[i], 0) / (mX * mY));
 };
 
+export const getVectorDistance = (x: number[], y: number[]) =>
+  Math.sqrt(x.reduce((acc, val, i) => acc + Math.pow(val - y[i], 2), 0));
+
 export const getAngle = (deltaX, deltaY) => {
-  let angle = getAngleBetweenVectors(
-    { x: 1, y: 0 },
-    { x: 1, y: deltaX / deltaY }
-  );
+  let angle = getVectorAngle([1, 0], [1, deltaX / deltaY])
 
   if (deltaX > 0 && deltaY < 0) angle = angle;
   if (deltaX > 0 && deltaY > 0) angle = Math.PI - angle;

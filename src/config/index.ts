@@ -1,2 +1,2 @@
-export const MOVING_ANIMATION_TIME = 500;
+export const MOVING_ANIMATION_TIME = 1000;
 export const ANIMATION_INTERACTIONS = 50;

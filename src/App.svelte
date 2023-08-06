@@ -1,35 +1,30 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import Canvas from "essentials/canvas";
+  import { Canvas, Point } from "core/essentials/index";
+  import { System, GamePlay } from "core/objects/index";
   import { MOVING_ANIMATION_TIME, ANIMATION_INTERACTIONS } from "config";
-  import { getAngle, getIsPointInCircle } from "utils/trigonometry";
   import { throttle, recursiveFunc } from "utils/functions";
 
-  import {
-    isMovementStore,
-    zoomStore,
-    timeStore,
-    povStore,
-    angleStore,
-  } from "store/interface";
-  // import { generateStars } from "objects/stars";
-  // import {
-  //   getDeltaAngle,
-  //   getPlanetPoint,
-  // } from "objects/planets";
-
-  import type { Point } from "types";
-
-  import Zoom from "components/Zoom.svelte";
   import Instruments from "components/Instruments.svelte";
-  import { Space, System } from "objects/index";
+  import PlanetView from "components/Planet.svelte";
+  import Destination from "core/objects/destination";
+  import { getIsPointInCircle } from "utils/trigonometry";
 
   let canvasEl;
-  let canvas: Canvas;
-  let space: Space;
+  let gamePlay: GamePlay;
 
   let isMounted = false;
+  let isMovement = false;
+
+  gamePlay = new GamePlay();
+  gamePlay.setSystem(new System(5000));
+
+  /**
+   * Dynamic vars
+   */
+  $: screen = gamePlay.getScreen();
+  $: zoom = gamePlay.getZoom();
 
   const getCorrectClickPoint = (e) => {
     const { offsetX, offsetY } = e;
@@ -40,40 +35,36 @@
     };
   };
 
-  // const getPointWithOffset = (point: Point) => {
-  //   const { x: deltaX, y: deltaY } = $povStore;
-  //   const { x: screenX, y: screenY } = canvas.getCenterPoint();
-
-  //   return {
-  //     x: point.x + screenX - deltaX,
-  //     y: point.y + screenY - deltaY,
-  //   };
-  // };
-
-  const movePoint = (newPoint: Point) => {
-    const { x: screenX, y: screenY } = canvas.getCenterPoint();
-    const { x: initialX, y: initialY } = $povStore;
-
-    const deltaX = newPoint.x - screenX;
-    const deltaY = newPoint.y - screenY;
-    const angle = getAngle(deltaX, deltaY);
-
-    isMovementStore.set(true);
-    angleStore.set(angle);
+  const playerMovement = (destination: Destination) => {
+    const deltaPoint = Point.minus(destination.getPoint(), gamePlay.getPOV());
 
     recursiveFunc(
       (i) => {
+        const deltaOfAnimation = Point.make(
+          deltaPoint,
+          (n) => (n / ANIMATION_INTERACTIONS) * 1
+        );
+
+        const newPOV = Point.plus(gamePlay.getPOV(), deltaOfAnimation);
+
         if (i === ANIMATION_INTERACTIONS) {
-          isMovementStore.set(false);
+          gamePlay.getPlayer().removeFirstDestination();
+          const nextPoint = gamePlay.getPlayer().getFirstDestinationPoint();
+
+          if (nextPoint) {
+            playerMovement(nextPoint);
+          } else {
+            isMovement = false;
+          }
+
+          if (destination.data) {
+            // selectedObjectIdStore.set(destination.data.id);
+            gamePlay.getPlayer().setHostObject(destination.data.id);
+            screen = gamePlay.setScreen("planet");
+          }
+        } else {
+          gamePlay.setPOV(newPOV);
         }
-
-        const newPOV = {
-          x: Math.ceil(initialX + (deltaX / ANIMATION_INTERACTIONS) * i),
-          y: Math.ceil(initialY + (deltaY / ANIMATION_INTERACTIONS) * i),
-        };
-
-        povStore.set(newPOV);
-        space.setPOV(newPOV);
       },
       MOVING_ANIMATION_TIME,
       ANIMATION_INTERACTIONS
@@ -83,91 +74,115 @@
   const onMouseClick = (e) => {
     const clickPoint = getCorrectClickPoint(e);
 
-    if (!$isMovementStore) {
-      movePoint(clickPoint);
+    const crossObjects = gamePlay.getObjectForSelectedPoint(clickPoint);
+    const destinationPoint = gamePlay.getPointWithWorldOffset(clickPoint);
+
+    let newDestination;
+
+    if (crossObjects) {
+      newDestination = new Destination(gamePlay, "planet", {
+        data: crossObjects,
+      });
+    } else {
+      newDestination = new Destination(gamePlay, "space", {
+        point: destinationPoint,
+      });
     }
 
-    // const planets = $planetsStore;
-    // const cross = planets.find((item) => {
-    //   const dAngle = getDeltaAngle(item, $timeStore);
-    //   const planetPoint = getPointWithOffset(getPlanetPoint(item, dAngle));
+    const sunPoint = gamePlay.getSystem().getStar().getPoint();
 
-    //   return getIsPointInCircle(clickPoint, planetPoint, item.radius / 2);
-    // });
+    const isIncluded = getIsPointInCircle(
+      destinationPoint,
+      sunPoint,
+      gamePlay.getSystem().getRadius()
+    );
 
-    // console.warn("onMouseClick", cross);
+    if (isIncluded) {
+      gamePlay.getPlayer().addDestination(newDestination);
+
+      if (!isMovement && newDestination) {
+        isMovement = true;
+
+        playerMovement(newDestination);
+      }
+    }
   };
 
   const onMouseMove = (e) => {
     const clickPoint = getCorrectClickPoint(e);
-    // const planets = $planetsStore;
+    const crossObjects = gamePlay.getObjectForSelectedPoint(clickPoint);
 
-    // const cross = planets.find((item) => {
-    //   const dAngle = getDeltaAngle(item, $timeStore);
-    //   const planetPoint = getPointWithOffset(getPlanetPoint(item, dAngle));
-
-    //   return getIsPointInCircle(clickPoint, planetPoint, item.radius / 2);
-    // });
-
-    // if (cross) {
-    //   canvasEl.style.cursor = "pointer";
-    // } else {
-    //   canvasEl.style.cursor = "default";
-    // }
+    if (crossObjects) {
+      canvasEl.style.cursor = "pointer";
+    } else {
+      canvasEl.style.cursor = "default";
+    }
   };
 
   const render = () => {
-    space.clear();
-    space.renderStars();
-    space.renderSun();
-    space.renderPlanets($timeStore);
-    space.renderUser($angleStore, $isMovementStore);
-    // console.warn('render')
+    gamePlay.clear();
+    gamePlay.render();
+
+    // console.warn('render', isMounted, canvas, space)
   };
 
   onMount(() => {
     isMounted = true;
 
-    canvas = new Canvas(canvasEl.getContext("2d"));
-    space = new Space(canvas);
-
-    space.setPOV($povStore);
-    space.setSystem(new System(5000));
+    gamePlay.setCanvas(new Canvas(canvasEl.getContext("2d")));
 
     setInterval(() => {
       render();
     }, 1000 / 30);
 
     setInterval(() => {
-      // timeStore.update((t) => t + 1);
+      gamePlay.increaseTime();
+      // render();
     }, 100);
   });
 
-  // povStore.subscribe(() => {
-  //   if (isMounted) render();
-  // });
+  const onPlanetLeave = () => {
+    const hostObjectId = gamePlay.getPlayer().getHostObject();
+    const planets = gamePlay.getSystem().getPlanets();
 
-  // timeStore.subscribe(() => {
-  //   if (isMounted) render();
-  // });
+    const hostObject = planets.find((item) => item.id === hostObjectId);
+    if (hostObject) {
+      const hostObjectPoint = hostObject.getPoint(gamePlay.getTime());
+      gamePlay.getPlayer().setHostObject()
+      gamePlay.setPOV(hostObjectPoint);
+    }
+  
+    screen = gamePlay.setScreen("space");
 
-  zoomStore.subscribe((value) => {
-    if (isMounted) canvas.setScale(value);
-  });
+    setTimeout(() => {
+      gamePlay.setCanvas(new Canvas(canvasEl.getContext("2d")));
+    }, 50);
+  };
+
+  const onZoonUpdate = (data) => {
+    zoom = gamePlay.updateZoom(data.detail.isPlus);
+  };
 </script>
 
 <main>
-  <canvas
-    bind:this={canvasEl}
-    width="2000"
-    height="1200"
-    id="canvas"
-    on:mousedown={onMouseClick}
-    on:mousemove={throttle(onMouseMove, 100)}
-  />
+  <div>
+    <!-- <div>{screen} {zoom}</div> -->
+    {#if screen === "space"}
+      <canvas
+        bind:this={canvasEl}
+        width="2000"
+        height="1200"
+        id="canvas"
+        on:mousedown={onMouseClick}
+        on:mousemove={throttle(onMouseMove, 100)}
+      />
+      <Instruments on:updateZoom={onZoonUpdate} />
+    {/if}
 
-  <Instruments />
-  <Zoom />
+    {#if screen === "planet"}
+      <PlanetView on:message={onPlanetLeave} />
+    {/if}
+  </div>
 </main>
 
 <style>
